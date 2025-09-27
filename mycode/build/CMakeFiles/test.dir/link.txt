@@ -1,0 +1,1 @@
+/usr/bin/c++ -rdynamic CMakeFiles/test.dir/chapter4.cpp.o CMakeFiles/test.dir/fun/fun4.cpp.o -o ../bin/test 

@@ -1,0 +1,5 @@
+/mnt/d/work/code/C/C++ Primer Plus/C++ Primer Plus/mycode/build/CMakeFiles/fun.dir
+/mnt/d/work/code/C/C++ Primer Plus/C++ Primer Plus/mycode/build/CMakeFiles/chapter3.dir
+/mnt/d/work/code/C/C++ Primer Plus/C++ Primer Plus/mycode/build/CMakeFiles/chapter4.dir
+/mnt/d/work/code/C/C++ Primer Plus/C++ Primer Plus/mycode/build/CMakeFiles/edit_cache.dir
+/mnt/d/work/code/C/C++ Primer Plus/C++ Primer Plus/mycode/build/CMakeFiles/rebuild_cache.dir
