@@ -329,6 +329,260 @@ list (REMOVE_AT <list> <index> [<index> ...])
 | `CMAKE_BINARY_DIR`         | 项目实际构建路径，假设在build目录进行的构建，那么得到的就是这个目录的路径 |
 
 ### 嵌套的CMake
+如果项目很大，或者项目中有很多的源码目录，在通过CMake管理项目的时候如果只使用一个CMakeLists.txt，那么这个文件相对会比较复杂，有一种化繁为简的方式就是给每个源码目录都添加一个CMakeLists.txt文件（头文件目录不需要），这样每个文件都不会太复杂，而且更灵活，更容易维护。
+
+#### 准备工作
+```
+$ tree
+.
+├── build
+├── calc
+│   ├── add.cpp
+│   ├── CMakeLists.txt
+│   ├── div.cpp
+│   ├── mult.cpp
+│   └── sub.cpp
+├── CMakeLists.txt
+├── include
+│   ├── calc.h
+│   └── sort.h
+├── sort
+│   ├── CMakeLists.txt
+│   ├── insert.cpp
+│   └── select.cpp
+├── test1
+│   ├── calc.cpp
+│   └── CMakeLists.txt
+└── test2
+    ├── CMakeLists.txt
+    └── sort.cpp
+
+6 directories, 15 files
+```
+##### 节点关系
+
+众所周知，Linux的目录是树状结构，所以嵌套的 CMake 也是一个树状结构，最顶层的 CMakeLists.txt 是根节点，其次都是子节点。因此，我们需要了解一些关于 CMakeLists.txt 文件变量作用域的一些信息：
+- 根节点CMakeLists.txt中的变量全局有效
+- 父节点CMakeLists.txt中的变量可以在子节点中使用
+- 子节点CMakeLists.txt中的变量只能在当前节点中使用
+
+##### 添加子目录
+接下来我们还需要知道在 CMake 中父子节点之间的关系是如何建立的，这里需要用到一个 CMake 命令：
+```
+add_subdirectory(source_dir [binary_dir] [EXCLUDE_FROM_ALL])
+```
+- source_dir：指定了CMakeLists.txt源文件和代码文件的位置，其实就是指定子目录
+- binary_dir：指定了输出文件的路径，一般不需要指定，忽略即可。
+- EXCLUDE_FROM_ALL：在子路径下的目标默认不会被包含到父路径的ALL目标里，并且也会被排除在IDE工程文件之外。用户必须显式构建在子路径下的目标。
+
+#### 各节点内容
+##### 根目录
+```
+cmake_minimum_required(VERSION 3.0)
+project(test)
+# 定义变量
+# 静态库生成的路径
+set(LIB_PATH ${CMAKE_CURRENT_SOURCE_DIR}/lib)
+# 测试程序生成的路径
+set(EXEC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/bin)
+# 头文件目录
+set(HEAD_PATH ${CMAKE_CURRENT_SOURCE_DIR}/include)
+# 静态库的名字
+set(CALC_LIB calc)
+set(SORT_LIB sort)
+# 可执行程序的名字
+set(APP_NAME_1 test1)
+set(APP_NAME_2 test2)
+# 添加子目录
+add_subdirectory(calc)
+add_subdirectory(sort)
+add_subdirectory(test1)
+add_subdirectory(test2)
+```
+##### 链接库
+```
+cmake_minimum_required(VERSION 3.0)
+project(CALCLIB)
+aux_source_directory(./ SRC)
+include_directories(${HEAD_PATH})
+set(LIBRARY_OUTPUT_PATH ${LIB_PATH})
+add_library(${CALC_LIB} STATIC ${SRC})
+```
+
+```
+cmake_minimum_required(VERSION 3.0)
+project(SORTLIB)
+aux_source_directory(./ SRC)
+include_directories(${HEAD_PATH})
+set(LIBRARY_OUTPUT_PATH ${LIB_PATH})
+add_library(${SORT_LIB} SHARED ${SRC})
+```
+##### test1 目录
+```
+cmake_minimum_required(VERSION 3.0)
+project(CALCTEST)
+aux_source_directory(./ SRC)
+include_directories(${HEAD_PATH})   # 指定头文件路径，HEAD_PATH变量是在根节点文件中定义的
+link_directories(${LIB_PATH})  
+link_libraries(${CALC_LIB}) # 指定可执行程序要链接的静态库，CALC_LIB变量是在根节点文件中定义的
+set(EXECUTABLE_OUTPUT_PATH ${EXEC_PATH})    # 指定可执行程序生成的路径，EXEC_PATH变量是在根节点文件中定义的
+add_executable(${APP_NAME_1} ${SRC})    # 生成可执行程序，APP_NAME_1变量是在根节点文件中定义的
+```
+##### test2 目录
+```
+cmake_minimum_required(VERSION 3.0)
+project(SORTTEST)
+aux_source_directory(./ SRC)
+include_directories(${HEAD_PATH})
+set(EXECUTABLE_OUTPUT_PATH ${EXEC_PATH})
+link_directories(${LIB_PATH})
+add_executable(${APP_NAME_2} ${SRC})
+target_link_libraries(${APP_NAME_2} ${SORT_LIB})
+```
 
 ### 流程控制
+#### 条件判断
+```
+if(<condition>)
+  <commands>
+elseif(<condition>) # 可选快, 可以重复
+  <commands>
+else()              # 可选快
+  <commands>
+endif()
+```
+- 如果是1, ON, YES, TRUE, Y, 非零值，非空字符串时，条件判断返回True
+- 如果是 0, OFF, NO, FALSE, N, IGNORE, NOTFOUND，空字符串时，条件判断返回False
 
+#### 逻辑判断
+```
+if(NOT <condition>)
+```
+其实这就是一个取反操作，如果条件condition为True将返回False，如果条件condition为False将返回True。
+
+```
+if(<cond1> AND <cond2>)
+```
+如果cond1和cond2同时为True，返回True否则返回False。
+
+```
+if(<cond1> OR <cond2>)
+```
+如果cond1和cond2两个条件中至少有一个为True，返回True，如果两个条件都为False则返回False。
+
+#### 比较
+基于数值的比较
+```
+if(<variable|string> LESS <variable|string>)
+if(<variable|string> GREATER <variable|string>)
+if(<variable|string> EQUAL <variable|string>)
+if(<variable|string> LESS_EQUAL <variable|string>)
+if(<variable|string> GREATER_EQUAL <variable|string>)
+```
+- LESS：如果左侧数值小于右侧，返回True
+- GREATER：如果左侧数值大于右侧，返回True
+- EQUAL：如果左侧数值等于右侧，返回True
+- LESS_EQUAL：如果左侧数值小于等于右侧，返回True
+
+基于字符串的比较
+```
+if(<variable|string> STRLESS <variable|string>)
+if(<variable|string> STRGREATER <variable|string>)
+if(<variable|string> STREQUAL <variable|string>)
+if(<variable|string> STRLESS_EQUAL <variable|string>)
+if(<variable|string> STRGREATER_EQUAL <variable|string>)
+```
+- STRLESS：如果左侧字符串小于右侧，返回True
+- STRGREATER：如果左侧字符串大于右侧，返回True
+- STREQUAL：如果左侧字符串等于右侧，返回True
+- STRLESS_EQUAL：如果左侧字符串小于等于右侧，返回True
+- STRGREATER_EQUAL：如果左侧字符串大于等于右侧，返回True
+
+#### 文件操作
+判断文件或者目录是否存在```if(EXISTS path-to-file-or-directory)```
+
+判断是不是目录```if(IS_DIRECTORY path)```
+
+判断是不是软连接```if(IS_SYMLINK file-name)```
+
+判断是不是绝对路径```if(IS_ABSOLUTE path)```
+
+#### 循环
+##### foreach
+```
+foreach(<loop_var> <items>)
+    <commands>
+endforeach()
+```
+通过foreach我们就可以对items中的数据进行遍历，然后通过loop_var将遍历到的当前的值取出，在取值的时候有以下几种用法：
+
+```foreach(<loop_var> RANGE <stop>)```
+- RANGE：关键字，表示要遍历范围
+- stop：这是一个正整数，表示范围的结束值，在遍历的时候从 0 开始，最大值为 stop。
+- loop_var：存储每次循环取出的值
+
+```foreach(<loop_var> RANGE <start> <stop> [<step>])```
+- RANGE：关键字，表示要遍历范围
+- start：这是一个正整数，表示范围的起始值，也就是说最小值为 start
+- stop：这是一个正整数，表示范围的结束值，也就是说最大值为 stop
+- step：控制每次遍历的时候以怎样的步长增长，默认为1，可以不设置
+- loop_var：存储每次循环取出的值
+
+```foreach(<loop_var> IN [LISTS [<lists>]] [ITEMS [<items>]])```
+- IN：关键字，表示在 xxx 里边
+- LISTS：关键字，对应的是列表list，通过set、list可以获得
+- ITEMS：关键字，对应的也是列表
+- loop_var：存储每次循环取出的值
+```
+cmake_minimum_required(VERSION 3.2)
+project(test)
+# 创建 list
+set(WORD a b c d)
+set(NAME ace sabo luffy)
+# 遍历 list
+foreach(item IN LISTS WORD NAME)
+    message(STATUS "当前遍历的值为: ${item}" )
+endforeach()
+```
+
+```foreach(<loop_var>... IN ZIP_LISTS <lists>)```
+```
+cmake_minimum_required(VERSION 3.17)
+project(test)
+# 通过list给列表添加数据
+list(APPEND WORD hello world "hello world")
+list(APPEND NAME ace sabo luffy zoro sanji)
+# 遍历列表
+foreach(item1 item2 IN ZIP_LISTS WORD NAME)
+    message(STATUS "当前遍历的值为: item1 = ${item1}, item2=${item2}" )
+endforeach()
+
+message("=============================")
+# 遍历列表
+foreach(item  IN ZIP_LISTS WORD NAME)
+    message(STATUS "当前遍历的值为: item1 = ${item_0}, item2=${item_1}" )
+endforeach()
+```
+
+##### while
+```
+while(<condition>)
+    <commands>
+endwhile()
+```
+```
+cmake_minimum_required(VERSION 3.5)
+project(test)
+# 创建一个列表 NAME
+set(NAME luffy sanji zoro nami robin)
+# 得到列表长度
+list(LENGTH NAME LEN)
+# 循环
+while(${LEN} GREATER  0)
+    message(STATUS "names = ${NAME}")
+    # 弹出列表头部元素
+    list(POP_FRONT NAME)
+    # 更新列表长度
+    list(LENGTH NAME LEN)
+endwhile()
+```
